@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Combined Maps</title>
+    <script src="./libs/d3.js"></script>
+    <script src="./libs/d3jstopojson.v1.js"></script>
+    <style>
+        #tooltip {
+            position: absolute;
+            opacity: 0;
+            top: 0;
+            left: 0;
+            width: auto;
+            padding: 10px;
+            background: white;
+            font-family: sans-serif;
+            font-size: medium;
+            border-radius: 2px;
+            line-height: 1;
+            pointer-events: none;
+        }
+
+        path {
+            stroke-width: .5px;
+            stroke: black;
+        }
+
+        path:hover {
+            opacity: .6;
+            stroke: black;
+            stroke-width: 4px;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Styling for the title to give a bold, professional look */
+        h1 {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #333333;
+            text-align: center;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-family: 'Arial', sans-serif;
+        }
+
+        /* Styling for the name to complement the title */
+        h3 {
+            font-size: 1.5em;
+            color: #555555;
+            /* font-style: italic; */
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-family: 'Arial', sans-serif;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="tooltip"></div>
+    <div class="container">
+        <h1>Major Assignment 2: Geospatial Visualizations</h1>
+        <h3>Sanika Sawal</h3>
+        <h2>Map A: Actual Population in 1980</h2>
+        <div id="mapA"></div>
+        <h2>Map B: Population Change between 1980 and 2010</h2>
+        <div id="mapB"></div>
+        <h2>Map C: Color coded map with Gini Index for each county in 2019</h2>
+        <div id="mapC"></div>
+    </div>
+
+    <script>
+        /*-------------------------------------------------------*/
+        /*------------------- Window setting --------------------*/
+        /*-------------------------------------------------------*/
+        // Dimension of the page
+        const window_dims = {
+            width: window.innerWidth,
+            height: window.innerHeight
+        };
+
+        const svgWidth = window_dims.width / 2;
+        const svgHeight = window_dims.width / 3;
+
+        /*-------------------------------------------------------*/
+        /*----------------- Parallel load data ------------------*/
+        /*-------------------------------------------------------*/
+        // TopoJSON file containing population of each town in different years
+        const MA_counties = "./data/towns.topojson";
+
+        // Gini index data for each county
+        const giniIndexData = [
+            { "fips_code": 25001, "gini_index": 0.4542 },
+            { "fips_code": 25003, "gini_index": 0.4621 },
+            { "fips_code": 25005, "gini_index": 0.4579 },
+            { "fips_code": 25007, "gini_index": 0.4990 },
+            { "fips_code": 25009, "gini_index": 0.4816 },
+            { "fips_code": 25011, "gini_index": 0.4607 },
+            { "fips_code": 25013, "gini_index": 0.4678 },
+            { "fips_code": 25015, "gini_index": 0.4553 },
+            { "fips_code": 25017, "gini_index": 0.4654 },
+            { "fips_code": 25019, "gini_index": 0.4772 },
+            { "fips_code": 25021, "gini_index": 0.4701 },
+            { "fips_code": 25023, "gini_index": 0.4639 },
+            { "fips_code": 25025, "gini_index": 0.4823 },
+            { "fips_code": 25027, "gini_index": 0.4692 }
+        ];
+
+        const countyData = [
+            { "county": "Barnstable County", "fips_code": 25001 },
+            { "county": "Berkshire County", "fips_code": 25003 },
+            { "county": "Bristol County", "fips_code": 25005 },
+            { "county": "Dukes County", "fips_code": 25007 },
+            { "county": "Essex County", "fips_code": 25009 },
+            { "county": "Franklin County", "fips_code": 25011 },
+            { "county": "Hampden County", "fips_code": 25013 },
+            { "county": "Hampshire County", "fips_code": 25015 },
+            { "county": "Middlesex County", "fips_code": 25017 },
+            { "county": "Nantucket County", "fips_code": 25019 },
+            { "county": "Norfolk County", "fips_code": 25021 },
+            { "county": "Plymouth County", "fips_code": 25023 },
+            { "county": "Suffolk County", "fips_code": 25025 },
+            { "county": "Worcester County", "fips_code": 25027 }
+        ];
+
+        // Load the TopoJSON file
+        d3.json(MA_counties).then(topology_data => {
+            // Convert TopoJSON to GeoJSON
+            const geojson = topojson.feature(topology_data, topology_data.objects.ma);
+            const tooltip = d3.select("#tooltip");
+            const colorInterpolator = d3.interpolateRgbBasis(['#d73027', '#fc8d59', '#fee090', '#e0f3f8', '#91bfdb', '#4575b4'].reverse());
+
+            // MAP A: Population in 1980
+            function createMapA() {
+                const svg = d3.select("#mapA").append("svg").attr("width", svgWidth).attr("height", svgHeight);
+                const linearScale = d3.scaleLinear()
+                    .domain(d3.extent(geojson.features, d => d.properties.POP1980))
+                    .range([0, 1]);
+                const projection = d3.geoMercator().fitSize([svgWidth, svgHeight], geojson);
+                const path = d3.geoPath().projection(projection);
+
+                svg.selectAll("path")
+                    .data(geojson.features)
+                    .enter().append("path")
+                    .attr("d", path)
+                    .attr("fill", d => colorInterpolator(linearScale(d.properties.POP1980)))
+                    .on("mouseenter", (event, d) => {
+                        tooltip.style("opacity", 1)
+                            .html(`<strong>Town:</strong> ${d.properties.TOWN}<br><strong>Population 1980:</strong> ${d.properties.POP1980}`)
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 28) + "px");
+                    })
+                    .on("mouseleave", () => tooltip.style("opacity", 0));
+            }
+
+            // MAP B: Population Change between 1980 and 2010
+            function createMapB() {
+                const svg = d3.select("#mapB").append("svg").attr("width", svgWidth).attr("height", svgHeight);
+                const linearScale = d3.scaleLinear()
+                    .domain(d3.extent(geojson.features, d => d.properties.POP2010 - d.properties.POP1980))
+                    .range([0, 1]);
+                const projection = d3.geoMercator().fitSize([svgWidth, svgHeight], geojson);
+                const path = d3.geoPath().projection(projection);
+
+                svg.selectAll("path")
+                    .data(geojson.features)
+                    .enter().append("path")
+                    .attr("d", path)
+                    .attr("fill", d => colorInterpolator(linearScale(d.properties.POP2010 - d.properties.POP1980)))
+                    .on("mouseenter", (event, d) => {
+                        tooltip.style("opacity", 1)
+                            .html(`
+                                <strong>Town:</strong> ${d.properties.TOWN}<br>
+                                <strong>Population in 1980:</strong> ${d.properties.POP1980}<br>
+                                <strong>Population in 2010:</strong> ${d.properties.POP2010}<br>
+                                <strong>Population Change:</strong> ${d.properties.POP2010 - d.properties.POP1980}
+                            `)
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 28) + "px");
+                    })
+                    .on("mouseleave", () => tooltip.style("opacity", 0));
+            }
+
+
+            // MAP C: Map by County colors with Gini Index
+            const countyColorScale = d3.scaleOrdinal()
+                .domain(countyData.map(d => d.fips_code))
+                .range(d3.schemeCategory10);
+
+            // Function to get the county color based on FIPS code
+            function getCountyColor(fips_code) {
+                return countyColorScale(fips_code);
+            }
+
+            function generateCountyMap() {
+                const svg = d3.select("#mapC").append("svg")
+                    .attr("width", svgWidth)
+                    .attr("height", svgHeight);
+
+                const projection = d3.geoMercator()
+                    .fitSize([svgWidth, svgHeight], geojson);
+
+                const path = d3.geoPath().projection(projection);
+
+                svg.selectAll("path")
+                    .data(geojson.features)
+                    .enter()
+                    .append("path")
+                    .attr("d", path)
+                    .attr("fill", d => getCountyColor(d.properties.FIPS_STCO))
+                    .on("mouseenter", (event, d) => {
+                        tooltip.style("opacity", 1);
+                        const countyInfo = countyData.find(c => c.fips_code === +d.properties.FIPS_STCO);
+                        const giniInfo = giniIndexData.find(g => g.fips_code === +d.properties.FIPS_STCO);
+                        const countyName = countyInfo ? countyInfo.county : "Unknown";
+                        const townName = d.properties.TOWN;
+                        const giniIndex = giniInfo ? giniInfo.gini_index : "N/A";
+
+                        tooltip.html(`<strong>Town:</strong> ${townName}<br>
+                                      <strong>County:</strong> ${countyName}<br>
+                                      <strong>Gini Index:</strong> ${giniIndex}`)
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 28) + "px");
+                    })
+                    .on("mouseleave", () => {
+                        tooltip.style("opacity", 0);
+                    });
+            }
+
+            // Generate each map
+            createMapA();
+            createMapB();
+            generateCountyMap();
+        });
+    </script>
+</body>
+
+</html>
